@@ -1,43 +1,56 @@
 package org.omidp.ws;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
-import org.atmosphere.annotation.Broadcast;
-import org.atmosphere.annotation.Suspend;
-import org.atmosphere.config.service.AtmosphereService;
+import org.atmosphere.config.service.AtmosphereHandlerService;
+import org.atmosphere.cpr.AtmosphereHandler;
+import org.atmosphere.cpr.AtmosphereRequest;
+import org.atmosphere.cpr.AtmosphereResource;
 import org.atmosphere.cpr.AtmosphereResourceEvent;
-import org.atmosphere.cpr.AtmosphereResourceEventListenerAdapter;
-import org.atmosphere.jersey.JerseyBroadcaster;
+import org.atmosphere.cpr.AtmosphereResponse;
 
+//@Path("/")
+@AtmosphereHandlerService(path = "/chat")
+public class ChatResource implements AtmosphereHandler {
 
-@Path("/")
-@AtmosphereService (broadcaster = JerseyBroadcaster.class)
-public class ChatResource {
+	@Override
+	public void onRequest(AtmosphereResource resource) throws IOException {
+		AtmosphereRequest request = resource.getRequest();
+		if (request.getMethod().equalsIgnoreCase("GET")) {
+			resource.suspend();
+		} else if (request.getMethod().equalsIgnoreCase("POST")) {
+			resource.getBroadcaster().broadcast(
+					request.getReader().readLine().trim());
+			//resource.getBroadcaster().scheduleFixedBroadcast(request.getReader().readLine().trim(), 3, TimeUnit.SECONDS);
+		}
+	}
 
-	@Suspend(contentType = "application/json", listeners = {OnDisconnect.class})
-    @GET
-    public String suspend() {
+	@Override
+	public void onStateChange(AtmosphereResourceEvent event) throws IOException {
+		AtmosphereResource r = event.getResource();
+		AtmosphereResponse res = r.getResponse();
+		if (r.isSuspended()) {
+			String body = event.getMessage() == null ? "{}" : event.getMessage().toString(); //must be json
+			res.getWriter().write(body);
+			switch (r.transport()) {
+			case JSONP:
+			case LONG_POLLING:
+				event.getResource().resume();
+				break;
+			case WEBSOCKET:
+			case STREAMING:
+				res.getWriter().flush();
+				break;
+			}
+		}else if (!event.isResuming()){
+			event.broadcaster().broadcast("sa");
+		}
+	}
 
-        return "";
-    }
-	@Broadcast(writeEntity = true)
-    @POST
-    @Produces("application/json")
-    public Customer broadcast(Message message) {
-        return new Customer(message.author, message.message);
-    }
+	@Override
+	public void destroy() {
 
-    public static final class OnDisconnect extends AtmosphereResourceEventListenerAdapter {
-        /**
-         * {@inheritDoc}
-         */
-        @Override
-        public void onDisconnect(AtmosphereResourceEvent event) {
-            System.out.println(event);
-        }
-    }
-	
+	}
+
 }
