@@ -23,7 +23,7 @@ public class ChatResource {
 
         return "";
     }
-	@Broadcast(writeEntity = false)
+	@Broadcast(writeEntity = true)
     @POST
     @Produces("application/json")
     public Customer broadcast(Message message) {
